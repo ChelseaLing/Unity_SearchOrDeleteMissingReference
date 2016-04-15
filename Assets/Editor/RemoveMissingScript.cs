@@ -4,19 +4,18 @@ using System.IO;
 using System.Collections;
 using System.Text.RegularExpressions;
 
-
-public class MissingReference : ScriptableObject
+public class RemoveMissingScript : ScriptableObject
 {
-    [MenuItem("Assets/Chelsea/Search selectePrefab Missing reference")]
-    public static void missingReference()
+    [MenuItem("Assets/Chelsea/Remove Missing Scripts")]
+    public static void missingScript()
     {
         Rect wr = new Rect(300, 400, 600, 50);
-        MissingReferenceEditor window = (MissingReferenceEditor)EditorWindow.GetWindowWithRect(typeof(MissingReferenceEditor), wr, true, "Search selectePrefab Missing reference");
+        MissingScriptEditor window = (MissingScriptEditor)EditorWindow.GetWindowWithRect(typeof(MissingScriptEditor), wr, true, "Search selectePrefab Missing scripts");
         window.Show();
     }
 }
 
-public class MissingReferenceEditor : EditorWindow
+public class MissingScriptEditor : EditorWindow
 {
     private ArrayList selects = new ArrayList();
     private ArrayList searchPrefabs = new ArrayList();
@@ -58,7 +57,6 @@ public class MissingReferenceEditor : EditorWindow
         }
         isStartSearch = true;
     }
-
 
     private void addGameObjectToSelects(Object go)
     {
@@ -140,49 +138,36 @@ public class MissingReferenceEditor : EditorWindow
         }
     }
 
-    private void showError(string objectName, string propertyName)
-    {
-        Debug.LogError("Missing reference found in: " + objectName + ", Property : " + propertyName);
-    }
-
-    private string fullObjectPath(GameObject go)
-    {
-        return go.transform.parent == null ? go.name : fullObjectPath(go.transform.parent.gameObject) + "/" + go.name;
-    }
-
     private void searchMissing(int index)
     {
-        outputText = "Searching: " + searchPrefabs[index].ToString();
+        outputText = "Removing: " + searchPrefabs[index].ToString();
         GameObject prefab = AssetDatabase.LoadAssetAtPath(searchPrefabs[index].ToString(), typeof(GameObject)) as GameObject;
         if (prefab == null)
             return;
         GameObject instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
+
         GameObject[] sceneObj = GameObject.FindObjectsOfType<GameObject>();
-        int sceneObjLength = sceneObj.Length;
-        for (int i = 0; i < sceneObjLength; i++)
+        int sceneObjCount = sceneObj.Length;
+        for (int i = 0; i < sceneObjCount; i++)
         {
-            var objects = sceneObj[i].GetComponents<Component>();
-            foreach (var c in objects)
+            Component[] components = sceneObj[i].GetComponents<Component>();
+            SerializedObject serializedObject = new SerializedObject(sceneObj[i]);
+            var prop = serializedObject.FindProperty("m_Component");
+            int removeCount = 0;
+            for (int j = 0; j < components.Length; j++)
             {
-                if (c == null)
+                if (components[j] == null)
                 {
-                    Debug.LogError("Missing script found on: " + fullObjectPath(sceneObj[i]));
-                    continue;
-                }
-                SerializedObject serializedObject = new SerializedObject(c);
-                SerializedProperty serializedProperty = serializedObject.GetIterator();
-                while (serializedProperty.NextVisible(true))
-                {
-                    if (serializedProperty.propertyType != SerializedPropertyType.ObjectReference)
-                        continue;
-                    if (serializedProperty.objectReferenceValue == null && serializedProperty.objectReferenceInstanceIDValue != 0)
-                        showError(fullObjectPath(sceneObj[i]), serializedProperty.name);
+                    prop.DeleteArrayElementAtIndex(j - removeCount);
+                    removeCount++;
                 }
             }
+            serializedObject.ApplyModifiedProperties();
+            EditorUtility.SetDirty(instance);
         }
+        PrefabUtility.ReplacePrefab(instance, prefab);
         DestroyImmediate(instance);
         AssetDatabase.Refresh();
-
     }
 
     void Update()
@@ -195,7 +180,7 @@ public class MissingReferenceEditor : EditorWindow
             {
                 isStartSearch = false;
                 AssetDatabase.Refresh();
-                outputText = "Congratulations: open console view the search results ";
+                outputText = "Congratulations: it over ";
             }
         }
     }
