@@ -4,15 +4,14 @@ using System.IO;
 using System.Collections;
 using System.Text.RegularExpressions;
 
-
 public class MissingReference : ScriptableObject
 {
     [MenuItem("Assets/Chelsea/Search selectePrefab Missing reference")]
     public static void missingReference()
     {
-        Rect wr = new Rect(300, 400, 600, 50);
+        Rect wr = new Rect(300, 400, 200, 50);
         MissingReferenceEditor window = (MissingReferenceEditor)EditorWindow.GetWindowWithRect(typeof(MissingReferenceEditor), wr, true, "Search selectePrefab Missing reference");
-        window.Show();
+        window.findPrefabInYouSelect();
     }
 }
 
@@ -22,21 +21,16 @@ public class MissingReferenceEditor : EditorWindow
     private ArrayList searchPrefabs = new ArrayList();
     private Regex regex = new Regex("(Assets){1}");
     private bool isStartSearch = false;
-    private string outputText;
     private int currentHandleIndex = 0;
     private int searchPrefabsCount = 0;
+    private int interval = 10;
 
-    public void OnInspectorUpdate()
+    void OnGUI()
     {
-        this.Repaint();
+        GUILayout.Label(" in Searching: wait please!");
     }
 
-    public void OnGUI()
-    {
-        GUILayout.Label(outputText, EditorStyles.boldLabel);
-    }
-
-    public void Awake()
+    public void findPrefabInYouSelect()
     {
         isStartSearch = false;
         currentHandleIndex = 0;
@@ -47,18 +41,18 @@ public class MissingReferenceEditor : EditorWindow
         addGameObjectToSelects(Selection.activeGameObject);
         if (!getFilesBySelect())
         {
-            outputText = "Error: please select file or folder at first!";
+            Debug.LogError("Error: please select file or folder at first!");
             return;
         }
         searchPrefabsCount = searchPrefabs.Count;
         if (searchPrefabsCount <= 0)
         {
-            outputText = "Error: there is no '.prefab' file in your selected files or folders!";
+            Debug.LogError("Error: there is no '.prefab' file in your selected files or folders!");
             return;
         }
         isStartSearch = true;
+        Debug.Log("Searching,please waitting !");
     }
-
 
     private void addGameObjectToSelects(Object go)
     {
@@ -152,10 +146,9 @@ public class MissingReferenceEditor : EditorWindow
 
     private void searchMissing(int index)
     {
-        outputText = "Searching: " + searchPrefabs[index].ToString();
-        GameObject prefab = AssetDatabase.LoadAssetAtPath(searchPrefabs[index].ToString(), typeof(GameObject)) as GameObject;
-        if (prefab == null)
+        if (index >= searchPrefabs.Count)
             return;
+        GameObject prefab = AssetDatabase.LoadAssetAtPath(searchPrefabs[index].ToString(), typeof(GameObject)) as GameObject;
         GameObject instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
         GameObject[] sceneObj = GameObject.FindObjectsOfType<GameObject>();
         int sceneObjLength = sceneObj.Length;
@@ -178,16 +171,23 @@ public class MissingReferenceEditor : EditorWindow
                     if (serializedProperty.objectReferenceValue == null && serializedProperty.objectReferenceInstanceIDValue != 0)
                         showError(fullObjectPath(sceneObj[i]), serializedProperty.name);
                 }
+                serializedProperty = null;
+                serializedObject = null;
             }
         }
         DestroyImmediate(instance);
         AssetDatabase.Refresh();
-
+        sceneObj = null;
+        instance = null;
+        prefab = null;
     }
+
 
     void Update()
     {
-        if (isStartSearch)
+        if (!isStartSearch)
+            return;
+        if (interval >= 10)
         {
             searchMissing(currentHandleIndex);
             currentHandleIndex++;
@@ -195,8 +195,11 @@ public class MissingReferenceEditor : EditorWindow
             {
                 isStartSearch = false;
                 AssetDatabase.Refresh();
-                outputText = "Congratulations: open console view the search results ";
+                this.Close();
+                Debug.Log("Congratulations: searching is over! ");
             }
         }
+        else
+            interval++;
     }
 }

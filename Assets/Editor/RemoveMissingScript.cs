@@ -9,9 +9,9 @@ public class RemoveMissingScript : ScriptableObject
     [MenuItem("Assets/Chelsea/Remove Missing Scripts")]
     public static void missingScript()
     {
-        Rect wr = new Rect(300, 400, 600, 50);
+        Rect wr = new Rect(300, 400, 200, 50);
         MissingScriptEditor window = (MissingScriptEditor)EditorWindow.GetWindowWithRect(typeof(MissingScriptEditor), wr, true, "Search selectePrefab Missing scripts");
-        window.Show();
+        window.findPrefabInYouSelect();
     }
 }
 
@@ -21,21 +21,16 @@ public class MissingScriptEditor : EditorWindow
     private ArrayList searchPrefabs = new ArrayList();
     private Regex regex = new Regex("(Assets){1}");
     private bool isStartSearch = false;
-    private string outputText;
     private int currentHandleIndex = 0;
     private int searchPrefabsCount = 0;
-
-    public void OnInspectorUpdate()
-    {
-        this.Repaint();
-    }
+    private int interval = 20;
 
     public void OnGUI()
     {
-        GUILayout.Label(outputText, EditorStyles.boldLabel);
+        GUILayout.Label(" it working : wait please!");
     }
 
-    public void Awake()
+    public void findPrefabInYouSelect()
     {
         isStartSearch = false;
         currentHandleIndex = 0;
@@ -46,13 +41,13 @@ public class MissingScriptEditor : EditorWindow
         addGameObjectToSelects(Selection.activeGameObject);
         if (!getFilesBySelect())
         {
-            outputText = "Error: please select file or folder at first!";
+            Debug.LogError("Error: please select file or folder at first!");
             return;
         }
         searchPrefabsCount = searchPrefabs.Count;
         if (searchPrefabsCount <= 0)
         {
-            outputText = "Error: there is no '.prefab' file in your selected files or folders!";
+            Debug.LogError("Error: there is no '.prefab' file in your selected files or folders!");
             return;
         }
         isStartSearch = true;
@@ -138,16 +133,15 @@ public class MissingScriptEditor : EditorWindow
         }
     }
 
-    private void searchMissing(int index)
+    private void removeMissing(int index)
     {
-        outputText = "Removing: " + searchPrefabs[index].ToString();
-        GameObject prefab = AssetDatabase.LoadAssetAtPath(searchPrefabs[index].ToString(), typeof(GameObject)) as GameObject;
-        if (prefab == null)
+        if (index >= searchPrefabs.Count)
             return;
+        GameObject prefab = AssetDatabase.LoadAssetAtPath(searchPrefabs[index].ToString(), typeof(GameObject)) as GameObject;
         GameObject instance = PrefabUtility.InstantiatePrefab(prefab) as GameObject;
-
         GameObject[] sceneObj = GameObject.FindObjectsOfType<GameObject>();
         int sceneObjCount = sceneObj.Length;
+        bool isHaveRemove = false;
         for (int i = 0; i < sceneObjCount; i++)
         {
             Component[] components = sceneObj[i].GetComponents<Component>();
@@ -158,30 +152,44 @@ public class MissingScriptEditor : EditorWindow
             {
                 if (components[j] == null)
                 {
+                    isHaveRemove = true;
                     prop.DeleteArrayElementAtIndex(j - removeCount);
                     removeCount++;
                 }
             }
             serializedObject.ApplyModifiedProperties();
-            EditorUtility.SetDirty(instance);
+            EditorUtility.SetDirty(sceneObj[i]);
         }
+        EditorUtility.SetDirty(instance);
         PrefabUtility.ReplacePrefab(instance, prefab);
         DestroyImmediate(instance);
-        AssetDatabase.Refresh();
+        instance = null;
+        prefab = null;
+        sceneObj = null;
+        if (isHaveRemove)
+            Debug.Log("removeing :" + searchPrefabs[index].ToString());
     }
 
     void Update()
     {
         if (isStartSearch)
         {
-            searchMissing(currentHandleIndex);
-            currentHandleIndex++;
-            if (currentHandleIndex >= searchPrefabsCount)
+            if (interval >= 20)
             {
-                isStartSearch = false;
-                AssetDatabase.Refresh();
-                outputText = "Congratulations: it over ";
+                interval = 0;
+                removeMissing(currentHandleIndex);
+                currentHandleIndex++;
+                if (currentHandleIndex >= searchPrefabsCount)
+                {
+                    this.Close();
+                    isStartSearch = false;
+                    AssetDatabase.Refresh();
+                    Selection.objects.Initialize();
+                    Debug.Log("Congratulations: it over ");
+                }
             }
+            else
+                interval++;
         }
     }
 }
